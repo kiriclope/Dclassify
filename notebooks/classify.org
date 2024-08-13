@@ -1,0 +1,124 @@
+#+STARTUP: fold
+#+PROPERTY: header-args:ipython :results both :exports both :async yes :session decoder :kernel dual_data
+
+* Notebook Settings
+
+#+begin_src ipython
+%load_ext autoreload
+%autoreload 2
+%reload_ext autoreload
+
+%run /home/leon/dual_task/dual_data/notebooks/setup.py
+%matplotlib inline
+%config InlineBackend.figure_format = 'png'
+#+end_src
+
+#+RESULTS:
+: The autoreload extension is already loaded. To reload it, use:
+:   %reload_ext autoreload
+: Python exe
+: /home/leon/mambaforge/envs/dual_data/bin/python
+
+* Imports
+#+begin_src ipython
+import sys
+sys.path.insert(0, '../')
+
+from src.classificationCV import ClassificationCV
+from src.main import get_classification
+from src.utils import safe_roc_auc_score
+#+end_src
+
+#+RESULTS:
+
+* Synthetic data
+
+#+begin_src ipython
+from sklearn.datasets import make_classification
+
+# Generate synthetic dataset
+X, y = make_classification(n_samples=100,    # number of samples
+                           n_features=20,     # number of features
+                           n_informative=2,   # number of informative features
+                           n_redundant=2,     # number of redundant features
+                           n_classes=2,       # number of classes
+                           random_state=42)   # for reproducibility
+
+# we need to add a new axis for MNE estimators to work
+# ie getting a decoder for all time points
+
+X = X[..., np.newaxis]
+print(X.shape)  # Output: (1000, 20)
+print(y.shape)  # Output: (1000,)
+#+end_src
+
+#+RESULTS:
+: (100, 20, 1)
+: (100,)
+
+* Parameters
+
+#+begin_src ipython
+  options= {
+      'l1_ratio': 0.95, # elastic net regularization
+      'n_comp': None, # PCA
+      'scaler': None, # standardization
+      'bootstrap': 0, 'n_boots': 1, # bootstrapping coefs
+      'n_splits': 3, 'n_repeats': 1, # repeated stratified folds
+      'scoring': 'roc_auc', # scorer
+      'estimator':'sliding', # sliding or generalizing
+      'verbose': 0,
+      'n_jobs': 30,
+  }
+#+end_src
+
+#+RESULTS:
+
+* Classification
+** Model
+#+begin_src ipython
+  from sklearn.linear_model import LogisticRegression
+  # net = LogisticRegression(penalty='l1', solver='liblinear', class_weight='balanced', n_jobs=None)
+  model = LogisticRegression(penalty='elasticnet', solver='saga', class_weight='balanced', n_jobs=None, l1_ratio=0.95, max_iter=100, tol=.001, multi_class='multinomial')
+
+  params = {'model__C': np.logspace(-4, 4, 10)}
+  params = {}
+
+  model = ClassificationCV(model, params, **options)
+#+end_src
+
+#+RESULTS:
+
+** Coefficients
+
+#+begin_src ipython
+options['verbose'] = 0
+X_epoch = X[..., 0]
+coefs, bias = get_classification(model, X_epoch, y, RETURN='coefs', **options)
+#+end_src
+
+#+RESULTS:
+: Fitting hyperparameters on single epoch ...
+: Elapsed (with compilation) = 0h 0m 0s
+: {}
+: Elapsed (with compilation) = 0h 0m 0s
+
+** Scores
+
+#+begin_src ipython
+scores = get_classification(model, X, y, RETURN='scores', **options)
+#+end_src
+
+#+RESULTS:
+: Computing cv scores ...
+: Elapsed (with compilation) = 0h 0m 0s
+: Elapsed (with compilation) = 0h 0m 0s
+
+#+begin_src ipython
+print(scores.shape)
+print(scores)
+#+end_src
+
+#+RESULTS:
+: (3,)
+: [1.         0.98897059 1.        ]
