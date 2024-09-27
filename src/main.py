@@ -8,7 +8,7 @@ def convert_seconds(seconds):
     return h, m, s
 
 
-def get_classification(model, X, y, X_test=None, y_test=None, RETURN="overlaps", IF_COMPO=0, **kwargs):
+def get_classification(model, X, y, X_test=None, y_test=None, RETURN="overlaps", **kwargs):
     start = perf_counter()
 
     if kwargs["verbose"]:
@@ -16,7 +16,7 @@ def get_classification(model, X, y, X_test=None, y_test=None, RETURN="overlaps",
 
     if "scores" in RETURN:
         scores = model.get_cv_scores(
-            X, y, kwargs["scoring"], cv=None, X_test=X_test, y_test=y_test, IF_COMPO=IF_COMPO,
+            X, y, kwargs["scoring"], cv=None, X_test=X_test, y_test=y_test, IF_COMPO=kwargs['IF_COMPO'],
         )
         end = perf_counter()
         print("Elapsed (with compilation) = %dh %dm %ds" % convert_seconds(end - start))
