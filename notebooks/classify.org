@@ -31,6 +31,14 @@ from src.utils import safe_roc_auc_score
 
 #+RESULTS:
 
+#+begin_src ipython
+import mne
+print(mne.__version__)
+#+end_src
+
+#+RESULTS:
+: 1.4.2
+
 * Synthetic data
 
 #+begin_src ipython
@@ -60,10 +68,9 @@ print(y.shape)  # Output: (1000,)
 
 #+begin_src ipython
   options= {
-      'l1_ratio': 0.95, # elastic net regularization
       'n_comp': None, # PCA
       'scaler': None, # standardization
-      'bootstrap': 0, 'n_boots': 1, # bootstrapping coefs
+      'n_boots': 1, # bootstrapping coefs
       'n_splits': 3, 'n_repeats': 1, # repeated stratified folds
       'scoring': 'roc_auc', # scorer
       'estimator':'sliding', # sliding or generalizing

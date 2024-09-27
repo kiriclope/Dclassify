@@ -7,7 +7,7 @@ from sklearn.model_selection import GridSearchCV, RepeatedStratifiedKFold, Leave
 from sklearn.decomposition import PCA
 
 from mne.decoding import SlidingEstimator, GeneralizingEstimator, cross_val_multiscore
-from src.my_mne import my_cross_val_multiscore
+from src.my_mne import my_cross_val_multiscore, my_cross_val_compo_score
 
 def convert_seconds(seconds):
     h = seconds // 3600
@@ -17,9 +17,20 @@ def convert_seconds(seconds):
 
 class ClassificationCV:
     def __init__(self, model, params, **kwargs):
+        # kwargs = {
+        #     'n_comp': None, # PCA, int means number of PCs
+        #     'scaler': None, # standardization (z score)
+        #     'n_boots': 1, # bootstrapping coefs
+        #     'n_splits': 3, 'n_repeats': 1, # repeated stratified folds unless -1 is LOOCV
+        #     'scoring': 'roc_auc', # scorer
+        #     'estimator':'sliding', # sliding or generalizing
+        #     'verbose': 0,
+        #     'n_jobs': 30,
+        # }
+
         pipeline = []
 
-        # Standardize features, X, across trials
+        # Standardize features, X, z score across trials
         # see https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.StandardScaler.html
         self.scaler = kwargs["scaler"]
         if self.scaler is not None and self.scaler != 0:
@@ -28,7 +39,7 @@ class ClassificationCV:
         # Reduce features, X, dimensionality with PCA
         # see https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.PCA.html
         self.n_comp = kwargs["n_comp"]
-        if kwargs["n_comp"] is not None:
+        if (kwargs["n_comp"] is not None) and (kwargs["n_comp"]!=0):
             self.n_comp = kwargs["n_comp"]
             pipeline.append(("pca", PCA(n_components=self.n_comp)))
 
@@ -45,6 +56,7 @@ class ClassificationCV:
 
         # scorer of the classification
         # see https://scikit-learn.org/stable/modules/model_evaluation.html
+        # 'accuracy', 'roc_auc', 'f1'
         self.scoring = kwargs["scoring"]
 
         # Decoding over time (from MNE)
@@ -55,6 +67,7 @@ class ClassificationCV:
         # fits a multivariate predictive model on each time instant
         # and evaluates its performance at all other instant on new epochs.
         # see https://mne.tools/0.23/auto_tutorials/machine-learning/50_decoding.html
+        # 'sliding'or 'generalizing'
         self.estimator = kwargs["estimator"]
 
         # Defines the type of cross validation
@@ -217,7 +230,7 @@ class ClassificationCV:
 
         return np.array(overlaps_list).mean(0)
 
-    def get_cv_scores(self, X, y, scoring, cv=None, X_test=None, y_test=None):
+    def get_cv_scores(self, X, y, scoring, cv=None, X_test=None, y_test=None, IF_COMPO=0):
         """Cross validated model scores."""
 
         if cv is None:
@@ -245,16 +258,28 @@ class ClassificationCV:
         # self.scores = cross_val_multiscore(estimator, X.astype('float32'), y.astype('float32'),
         #                                    cv=cv, n_jobs=-1, verbose=False)
 
-        self.scores = my_cross_val_multiscore(
-            estimator,
-            X.astype("float32"),
-            X_test.astype("float32"),
-            y.astype("float32"),
-            y_test.astype("float32"),
-            cv=cv,
-            n_jobs=-1,
-            verbose=False,
-        )
+        if IF_COMPO:
+            self.scores = my_cross_val_compo_score(
+                estimator,
+                X.astype("float32"),
+                X_test.astype("float32"),
+                y.astype("float32"),
+                y_test,
+                cv=cv,
+                n_jobs=-1,
+                verbose=False,
+            )
+        else:
+            self.scores = my_cross_val_multiscore(
+                estimator,
+                X.astype("float32"),
+                X_test.astype("float32"),
+                y.astype("float32"),
+                y_test.astype("float32"),
+                cv=cv,
+                n_jobs=-1,
+                verbose=False,
+            )
 
         end = perf_counter()
         if self.verbose:
