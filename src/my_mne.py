@@ -572,6 +572,7 @@ def my_cross_val_compo_score(
     groups=None,
     scoring=None,
     cv=None,
+    cv_test=-1,
     n_jobs=None,
     verbose=None,
     fit_params=None,
@@ -591,8 +592,8 @@ def my_cross_val_compo_score(
 
     y = y % 2
 
-    # cv_test = list(cv.split(X2, y2, groups))
-    cv_test = -1
+    if cv_test!=-1:
+        cv_test = list(cv.split(X2, y2, groups))
 
     # print('cv_train', len(cv_train))
     # print('cv_test', len(cv_test))
