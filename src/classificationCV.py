@@ -267,7 +267,7 @@ class ClassificationCV:
                 y_test,
                 cv=cv,
                 cv_test=-1, # this means testing on all the test set no splitting.
-                n_jobs=-1,
+                n_jobs=None,
                 verbose=False,
             )
         else:
@@ -278,7 +278,7 @@ class ClassificationCV:
                 y.astype("float32"),
                 y_test.astype("float32"),
                 cv=cv,
-                n_jobs=-1,
+                n_jobs=None,
                 verbose=False,
             )
 

@@ -8,7 +8,7 @@ def convert_seconds(seconds):
     return h, m, s
 
 
-def get_classification(model, X, y, X_test=None, y_test=None, RETURN="overlaps", **kwargs):
+def get_classification(model, X, y, X_test=None, y_test=None, RETURN="scores", **kwargs):
     start = perf_counter()
 
     if kwargs["verbose"]:
