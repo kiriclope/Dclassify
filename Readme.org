@@ -10,6 +10,22 @@ This package provides a simple pipeline to perform diverse classification/regres
 
 ** Generalized Classification
 ** Compositional Classification
+** Project Structure
+#+begin_src sh
+.
+├── notebooks
+│   ├── classify.ipynb
+│   └── classify.org
+├── Readme.org
+├── requirements.txt
+└── src
+    ├── classificationCV.py # main class wrapper around scikit-learn
+    ├── main.py # example of simple function to call and use classificationCV class
+    ├── multiscore_cv.py # utils for cross temporal and compositional validation
+    ├── perceptron.py # a torch perceptron
+    ├── skorch.py # wrapper to use torch models with classificationCV
+    └── utils.py  # other utils
+#+end_src
 
 * Notebook Settings
 
