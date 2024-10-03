@@ -33,28 +33,30 @@ def cross_val_multiscore_A_B(
     cv_A = check_cv(cv_A, y_A, classifier=is_classifier(estimator))
     cv_A = list(cv_A.split(X_A, y_A, groups_A))
 
+    IF_COMPO=1
     if X_B is None:
-        X_B = X_A
-        y_B = y_A
+        IF_COMPO = 0
+        cv_B = [(1, 1)]
 
-    X_B, y_B, groups_A = indexable(X_B, y_B, groups_B)
-    # setting folds for set B
-    if cv_B is not None:
-        cv_B = check_cv(cv_B, y_B, classifier=is_classifier(estimator))
-        cv_B = list(cv_B.split(X_B, y_B, groups_B))
-    else:
-        # no split testing on all X_B
-        n_samples = len(y_B)
-        cv_B = [(np.arange(n_samples), np.arange(n_samples))]  # Single tuple for no split
+    if IF_COMPO:
+        X_B, y_B, groups_A = indexable(X_B, y_B, groups_B)
+        # setting folds for set B
+        if cv_B is not None:
+            cv_B = check_cv(cv_B, y_B, classifier=is_classifier(estimator))
+            cv_B = list(cv_B.split(X_B, y_B, groups_B))
+        else:
+            # no split testing on all X_B
+            n_samples = len(y_B)
+            cv_B = [(np.arange(n_samples), np.arange(n_samples))]  # Single tuple for no split
 
-    # using same folds for A and B for temporal generalization
-    if X_A.shape == X_B.shape and np.array_equal(X_A, X_B):
-        cv_B=cv_A
+        # using same folds for A and B for temporal generalization
+        if X_A.shape == X_B.shape and np.array_equal(X_A, X_B):
+            cv_B=cv_A
 
-    if verbose:
-        print('cv_A', len(cv_A), 'cv_B', len(cv_B))
-        print('X_A', X_A.shape, 'y_A', y_A.shape)
-        print('X_B', X_B.shape, 'y_B', y_B.shape)
+        if verbose:
+            print('cv_A', len(cv_A), 'cv_B', len(cv_B))
+            print('X_A', X_A.shape, 'y_A', y_A.shape)
+            print('X_B', X_B.shape, 'y_B', y_B.shape)
 
     try:
         scorer = check_scoring(estimator, scoring=scoring)
@@ -76,13 +78,12 @@ def cross_val_multiscore_A_B(
             y_B=y_B,
             test_B=test_B,
             scorer=scorer,
+            if_compo=IF_COMPO,
             fit_params=fit_params,
             verbose=None,
         )
         for (train_A, test_A) in cv_A
         for (_, test_B) in cv_B
-        # for (train_A, test_A), (_, test_B) in zip(cv_A, cv_B)
-        #     for ii, (train, test) in enumerate(cv_iter)
     ))
 
     return np.array(scores), probas, coefs
@@ -98,6 +99,7 @@ def _fit_and_score_A_B(
     y_B,
     test_B,
     scorer,
+    if_compo,
     fit_params,
     verbose,
 ):
@@ -105,7 +107,6 @@ def _fit_and_score_A_B(
 
     X_train, y_train = _safe_split(estimator, X_A, y_A, train_A)
     X_A_test, y_A_test = _safe_split(estimator, X_A, y_A, test_A, train_A)
-    X_B_test, y_B_test = _safe_split(estimator, X_B, y_B, test_B)
 
     # Adjust length of sample weights
     fit_params = fit_params if fit_params is not None else {}
@@ -119,20 +120,20 @@ def _fit_and_score_A_B(
     if verbose:
         print(estimator)
 
-    score_A = _score(estimator, X_A_test, y_A_test, scorer)
-    score_B = _score(estimator, X_B_test, y_B_test, scorer)
+    scores = _score(estimator, X_A_test, y_A_test, scorer)
+    probas = np.array(estimator.predict_proba(X_A_test))
 
-    if verbose:
-        print('scores', score_A, score_B)
+    if if_compo:
+        X_B_test, y_B_test = _safe_split(estimator, X_B, y_B, test_B)
+        score_B = _score(estimator, X_B_test, y_B_test, scorer)
+        proba_B = np.array(estimator.predict_proba(X_B_test))
 
-    proba_A = np.array(estimator.predict_proba(X_A_test))
-    proba_B = np.array(estimator.predict_proba(X_B_test))
+        scores = [scores, score_B]
+        probas = [probas, proba_B]
 
-    if verbose:
-        print('probas', proba_A.shape, proba_B.shape)
-
-    scores = [score_A, score_B]
-    probas = [proba_A, proba_B]
+        if verbose:
+            print('scores', scores, score_B)
+            print('probas', probas.shape, proba_B.shape)
 
     coefs = get_coef(estimator, 'coef_')
     intercept = get_coef(estimator, 'intercept_')

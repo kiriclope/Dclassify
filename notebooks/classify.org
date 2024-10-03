@@ -139,6 +139,21 @@ print(scores.shape)
 : (5, 2, 10)
 
 #+begin_src ipython
+print(np.array(probas).shape)
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+# [goto error]
+: ---------------------------------------------------------------------------
+: ValueError                                Traceback (most recent call last)
+: Cell In[39], line 1
+: ----> 1 print(np.array(probas).shape)
+:
+: ValueError: setting an array element with a sequence. The requested array has an inhomogeneous shape after 2 dimensions. The detected shape was (5, 2) + inhomogeneous part.
+:END:
+
+#+begin_src ipython
 print(np.array(coefs).shape)
 #+end_src
 

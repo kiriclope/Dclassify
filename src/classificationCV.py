@@ -263,12 +263,6 @@ class ClassificationCV:
         if cv is None:
             cv = self.cv
 
-        # Here X_B, y_B can be provided for evaluating compositional scores.
-        # i.e., training on a set of features X, y and testing on a different one.
-        if X_B is None:
-            X_B = X
-            y_B = y
-
         start = perf_counter()
         if self.verbose:
             print("Computing cv scores ...")
