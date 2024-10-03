@@ -230,7 +230,7 @@ class ClassificationCV:
 
         return np.array(overlaps_list).mean(0)
 
-    def get_cv_scores(self, X, y, scoring, cv=None, X_B=None, y_B=None, cv_B=None):
+    def get_cv_scores(self, X, y, scoring, cv=None, X_B=None, y_B=None, cv_B=None, verbose=False):
         """Cross validated model scores:
 
         Parameters:
@@ -290,9 +290,8 @@ class ClassificationCV:
             X_B=X_B,
             y_B=y_B,
             cv_B=cv_B,
-            scoring=scoring,
             n_jobs=None,
-            verbose=False,
+            verbose=verbose,
         )
 
         end = perf_counter()

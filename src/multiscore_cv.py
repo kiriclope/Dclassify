@@ -116,6 +116,9 @@ def _fit_and_score_A_B(
     else:
         estimator.fit(X_train, y_train, **fit_params)
 
+    if verbose:
+        print(estimator)
+
     score_A = _score(estimator, X_A_test, y_A_test, scorer)
     score_B = _score(estimator, X_B_test, y_B_test, scorer)
 

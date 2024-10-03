@@ -15,7 +15,7 @@ def get_classification(model, X, y, cv=None, X_B=None, y_B=None, cv_B=None, RETU
         print("Features, X,", X.shape, " | labels, y,", y.shape)
 
     if "scores" in RETURN:
-        scores, probas, coefs= model.get_cv_scores(X, y, kwargs["scoring"], cv=cv, X_B=X_B, y_B=y_B, cv_B=cv_B)
+        scores, probas, coefs= model.get_cv_scores(X, y, kwargs["scoring"], cv=cv, X_B=X_B, y_B=y_B, cv_B=cv_B, verbose=kwargs['verbose'])
         end = perf_counter()
         print("Elapsed (with compilation) = %dh %dm %ds" % convert_seconds(end - start))
         return scores, probas, coefs
