@@ -116,21 +116,18 @@ coefs, bias = get_classification(super_model, X_epoch, y, RETURN='coefs', **opti
 
 #+RESULTS:
 : Fitting hyperparameters on single epoch ...
-: Elapsed (with compilation) = 0h 0m 1s
+: Elapsed (with compilation) = 0h 0m 0s
 : {}
-: Elapsed (with compilation) = 0h 0m 1s
+: Elapsed (with compilation) = 0h 0m 0s
 
 ** Scores
 
 #+begin_src ipython
-scores, probas, coefs = get_classification(super_model, X, y, X_B=X_B, y_B=y_B, cv_B=3, RETURN='scores', **options)
+scores, probas, coefs = get_classification(super_model, X, y, X_B=None, y_B=y_B, RETURN='scores', **options)
 #+end_src
 
 #+RESULTS:
 : Computing cv scores ...
-: 1
-: 2
-: 3
 : Elapsed (with compilation) = 0h 0m 0s
 : Elapsed (with compilation) = 0h 0m 0s
 
@@ -139,26 +136,18 @@ print(scores.shape)
 #+end_src
 
 #+RESULTS:
-: (3, 2, 10)
+: (5, 10)
 
 #+begin_src ipython
 print(np.array(probas).shape)
 #+end_src
 
 #+RESULTS:
-:RESULTS:
-# [goto error]
-: ---------------------------------------------------------------------------
-: ValueError                                Traceback (most recent call last)
-: Cell In[10], line 1
-: ----> 1 print(np.array(probas).shape)
-:
-: ValueError: setting an array element with a sequence. The requested array has an inhomogeneous shape after 2 dimensions. The detected shape was (3, 2) + inhomogeneous part.
-:END:
+: (5, 20, 10, 2)
 
 #+begin_src ipython
 print(np.array(coefs).shape)
 #+end_src
 
 #+RESULTS:
-: (3, 21, 1, 10)
+: (5, 21, 1, 10)

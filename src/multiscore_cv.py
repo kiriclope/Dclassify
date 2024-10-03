@@ -36,7 +36,7 @@ def cross_val_multiscore_A_B(
     IF_COMPO=1
     if X_B is None:
         IF_COMPO = 0
-        cv_B = [(1, 1)]
+        cv_B = cv_A
 
     if IF_COMPO:
         X_B, y_B, groups_A = indexable(X_B, y_B, groups_B)
@@ -49,8 +49,8 @@ def cross_val_multiscore_A_B(
             n_samples = len(y_B)
             cv_B = []
             for (train_A, test_A) in cv_A:
-                cv_B.append((np.arange(n_samples), np.arange(n_samples)))  # Single tuple for no split
-
+                cv_B.append([np.arange(n_samples), np.arange(n_samples)])  # Single tuple for no split
+            print(len(cv_B))
         # using same folds for A and B for temporal generalization
         if X_A.shape == X_B.shape and np.array_equal(X_A, X_B):
             cv_B=cv_A
