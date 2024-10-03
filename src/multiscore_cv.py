@@ -47,7 +47,9 @@ def cross_val_multiscore_A_B(
         else:
             # no split testing on all X_B
             n_samples = len(y_B)
-            cv_B = [(np.arange(n_samples), np.arange(n_samples))]  # Single tuple for no split
+            cv_B = []
+            for (train_A, test_A) in cv_A:
+                cv_B.append((np.arange(n_samples), np.arange(n_samples)))  # Single tuple for no split
 
         # using same folds for A and B for temporal generalization
         if X_A.shape == X_B.shape and np.array_equal(X_A, X_B):
@@ -82,8 +84,8 @@ def cross_val_multiscore_A_B(
             fit_params=fit_params,
             verbose=None,
         )
-        for (train_A, test_A) in cv_A
-        for (_, test_B) in cv_B
+        for (train_A, test_A), (_, test_B) in zip(cv_A, cv_B)
+        #     for ii, (train, test) in enumerate(cv_iter)
     ))
 
     return np.array(scores), probas, coefs
