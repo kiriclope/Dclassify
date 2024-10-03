@@ -56,13 +56,16 @@ X, y = make_classification(n_samples=100,    # number of samples
 # ie getting a decoder for all time points
 
 X = X[..., np.newaxis]
-print(X.shape)  # Output: (1000, 20)
-print(y.shape)  # Output: (1000,)
+print('X', X.shape, 'y', y.shape)
+print('labels', np.unique(y))
+
+X_B = X[:10]
+y_B = y[:10]
 #+end_src
 
 #+RESULTS:
-: (100, 20, 1)
-: (100,)
+: X (100, 20, 1) y (100,)
+: labels [0 1]
 
 * Parameters
 
@@ -71,9 +74,10 @@ print(y.shape)  # Output: (1000,)
       'n_comp': None, # PCA
       'scaler': None, # standardization
       'n_boots': 1, # bootstrapping coefs
-      'n_splits': 3, 'n_repeats': 1, # repeated stratified folds
+      'n_splits': 5, 'n_repeats': 1, # repeated stratified folds
+      'IF_COMPO' : 0,
       'scoring': 'roc_auc', # scorer
-      'estimator':'sliding', # sliding or generalizing
+      'mne_estimator':'sliding', # sliding or generalizing
       'verbose': 0,
       'n_jobs': 30,
   }
@@ -83,6 +87,7 @@ print(y.shape)  # Output: (1000,)
 
 * Classification
 ** Model
+
 #+begin_src ipython
   from sklearn.linear_model import LogisticRegression
   # net = LogisticRegression(penalty='l1', solver='liblinear', class_weight='balanced', n_jobs=None)
@@ -91,7 +96,7 @@ print(y.shape)  # Output: (1000,)
   params = {'model__C': np.logspace(-4, 4, 10)}
   params = {}
 
-  model = ClassificationCV(model, params, **options)
+  super_model = ClassificationCV(model, params, **options)
 #+end_src
 
 #+RESULTS:
@@ -101,24 +106,19 @@ print(y.shape)  # Output: (1000,)
 #+begin_src ipython
 options['verbose'] = 0
 X_epoch = X[..., 0]
-coefs, bias = get_classification(model, X_epoch, y, RETURN='coefs', **options)
+coefs, bias = get_classification(super_model, X_epoch, y, RETURN='coefs', **options)
 #+end_src
 
 #+RESULTS:
-: Fitting hyperparameters on single epoch ...
-: Elapsed (with compilation) = 0h 0m 0s
-: {}
 : Elapsed (with compilation) = 0h 0m 0s
 
 ** Scores
 
 #+begin_src ipython
-scores = get_classification(model, X, y, RETURN='scores', **options)
+scores, probas, coefs = get_classification(super_model, X, y, X_B=X_B, y_B=y_B, RETURN='scores', **options)
 #+end_src
 
 #+RESULTS:
-: Computing cv scores ...
-: Elapsed (with compilation) = 0h 0m 0s
 : Elapsed (with compilation) = 0h 0m 0s
 
 #+begin_src ipython
@@ -127,5 +127,16 @@ print(scores)
 #+end_src
 
 #+RESULTS:
-: (3,)
-: [1.         0.98897059 1.        ]
+: (5, 2)
+: [[1. 1.]
+:  [1. 1.]
+:  [1. 1.]
+:  [1. 1.]
+:  [1. 1.]]
+
+#+begin_src ipython
+print(np.array(coefs).shape)
+#+end_src
+
+#+RESULTS:
+: (5, 21, 1, 1)

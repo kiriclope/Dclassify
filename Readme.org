@@ -1,6 +1,16 @@
 #+STARTUP: fold
 #+PROPERTY: header-args:ipython :results both :exports both :async yes :session decoder :kernel dual_data
 
+* Dclassify: a package for generalized and compositional temporal classification
+** Intro
+This package provides a simple pipeline to perform diverse classification/regression analysis:
+- Temporal Cross Validation
+- Generalized Temporal Cross Validation
+- Compositional Cross Validation
+
+** Generalized Classification
+** Compositional Classification
+
 * Notebook Settings
 
 #+begin_src ipython

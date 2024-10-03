@@ -8,26 +8,18 @@ def convert_seconds(seconds):
     return h, m, s
 
 
-def get_classification(model, X, y, X_test=None, y_test=None, RETURN="scores", **kwargs):
+def get_classification(model, X, y, cv=None, X_B=None, y_B=None, cv_B=None, RETURN="scores", **kwargs):
     start = perf_counter()
 
     if kwargs["verbose"]:
         print("Features, X,", X.shape, " | labels, y,", y.shape)
 
     if "scores" in RETURN:
-        scores = model.get_cv_scores(
-            X, y, kwargs["scoring"], cv=None, X_test=X_test, y_test=y_test, IF_COMPO=kwargs['IF_COMPO'],
-        )
+        scores, probas, coefs= model.get_cv_scores(X, y, kwargs["scoring"], cv=cv, X_B=X_B, y_B=y_B, cv_B=cv_B)
         end = perf_counter()
         print("Elapsed (with compilation) = %dh %dm %ds" % convert_seconds(end - start))
-        return scores
-    elif "overlaps" in RETURN:
-        coefs, bias = model.get_bootstrap_coefs(X_avg, y, n_boots=kwargs["n_boots"])
-        print("coefs", coefs.shape)
-        overlaps = model.get_bootstrap_overlaps(X)
-        end = perf_counter()
-        print("Elapsed (with compilation) = %dh %dm %ds" % convert_seconds(end - start))
-        return overlaps
+        return scores, probas, coefs
+
     elif "coefs" in RETURN:
         if kwargs["n_boots"] >1:
             print("Bagging Classifier")

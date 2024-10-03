@@ -6,8 +6,8 @@ from sklearn.pipeline import Pipeline
 from sklearn.model_selection import GridSearchCV, RepeatedStratifiedKFold, LeaveOneOut
 from sklearn.decomposition import PCA
 
-from mne.decoding import SlidingEstimator, GeneralizingEstimator, cross_val_multiscore
-from src.my_mne import my_cross_val_multiscore, my_cross_val_compo_score
+from mne.decoding import SlidingEstimator, GeneralizingEstimator
+from src.multiscore_cv import cross_val_multiscore_A_B
 
 def convert_seconds(seconds):
     h = seconds // 3600
@@ -23,7 +23,7 @@ class ClassificationCV:
         #     'n_boots': 1, # bootstrapping coefs
         #     'n_splits': 3, 'n_repeats': 1, # repeated stratified folds unless -1 is LOOCV
         #     'scoring': 'roc_auc', # scorer
-        #     'estimator':'sliding', # sliding or generalizing
+        #     'mne_estimator':'sliding', # sliding or generalizing
         #     'verbose': 0,
         #     'n_jobs': 30,
         # }
@@ -68,7 +68,7 @@ class ClassificationCV:
         # and evaluates its performance at all other instant on new epochs.
         # see https://mne.tools/0.23/auto_tutorials/machine-learning/50_decoding.html
         # 'sliding'or 'generalizing'
-        self.estimator = kwargs["estimator"]
+        self.mne_estimator = kwargs["mne_estimator"]
 
         # Defines the type of cross validation
         if kwargs["n_splits"] == -1:
@@ -230,57 +230,70 @@ class ClassificationCV:
 
         return np.array(overlaps_list).mean(0)
 
-    def get_cv_scores(self, X, y, scoring, cv=None, X_test=None, y_test=None, IF_COMPO=0):
-        """Cross validated model scores."""
+    def get_cv_scores(self, X, y, scoring, cv=None, X_B=None, y_B=None, cv_B=None):
+        """Cross validated model scores:
+
+        Parameters:
+         X: float, array of size (N_SAMPLES, N_FEATURES, N_TIMES)
+         y: float, array of size (N_SAMPLES,)
+
+         scoring: str or callable, default=None
+                  A str (see model evaluation documentation)
+                  or a scorer callable object / function
+                  with signature scorer(estimator, X, y)
+                  which should return only a single value.
+
+         cv: int or cross-validation generator, default=None
+             The default cross-validation generator used is Stratified K-Folds.
+             If an integer is provided, then it is the number of folds used.
+             See the module sklearn.model_selection module for
+             the list of possible cross-validation objects.
+
+         X_B: None or float array of size (N_SAMPLES_B, N_FEATURES_B, N_TIMES)
+         y_B: None or float array of size (N_SAMPLES_B,)
+         cv_B: same as cv
+
+        Returns:
+        scores: float array of test scores.
+        If X_B is not None, for each fold in cv, a model is fitted on the train split of (X, y)
+        and tested on the test splits of (X, y) and (X_B, y_B)
+        probas: tupple of floats of predicted probas.
+        """
 
         if cv is None:
             cv = self.cv
 
-        # Here X_test, y_test can be provided for evaluating compositional scores.
+        # Here X_B, y_B can be provided for evaluating compositional scores.
         # i.e., training on a set of features X, y and testing on a different one.
-        if X_test is None:
-            X_test = X
-            y_test = y
+        if X_B is None:
+            X_B = X
+            y_B = y
 
         start = perf_counter()
         if self.verbose:
             print("Computing cv scores ...")
 
-        if self.estimator == 'sliding':
+        if self.mne_estimator == 'sliding':
             estimator = SlidingEstimator(
                 clone(self.best_model), n_jobs=1, scoring=scoring, verbose=False
             )
-        elif self.estimator == 'generalizing':
+        elif self.mne_estimator == 'generalizing':
             estimator = GeneralizingEstimator(
                 clone(self.best_model), n_jobs=1, scoring=scoring, verbose=False
             )
 
-        # self.scores = cross_val_multiscore(estimator, X.astype('float32'), y.astype('float32'),
-        #                                    cv=cv, n_jobs=-1, verbose=False)
-
-        if IF_COMPO:
-            self.scores = my_cross_val_compo_score(
-                estimator,
-                X.astype("float32"),
-                X_test.astype("float32"),
-                y.astype("float32"),
-                y_test,
-                cv=cv,
-                cv_test=-1, # this means testing on all the test set no splitting.
-                n_jobs=None,
-                verbose=False,
-            )
-        else:
-            self.scores = my_cross_val_multiscore(
-                estimator,
-                X.astype("float32"),
-                X_test.astype("float32"),
-                y.astype("float32"),
-                y_test.astype("float32"),
-                cv=cv,
-                n_jobs=None,
-                verbose=False,
-            )
+        self.scores, self.probas, self.coefs = cross_val_multiscore_A_B(
+            estimator,
+            X_A=X,
+            y_A=y,
+            cv_A=cv,
+            X_B=X_B,
+            y_B=y_B,
+            cv_B=cv_B,
+            scoring=scoring,
+            n_jobs=None,
+            verbose=False,
+        )
 
         end = perf_counter()
         if self.verbose:
@@ -289,4 +302,4 @@ class ClassificationCV:
                 % convert_seconds(end - start)
             )
 
-        return self.scores
+        return self.scores, self.probas, self.coefs
