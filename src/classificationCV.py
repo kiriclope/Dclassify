@@ -1,4 +1,7 @@
+import numpy as np
 from time import perf_counter
+from copy import deepcopy
+
 from sklearn.base import clone
 from sklearn.ensemble import BaggingClassifier
 from sklearn.preprocessing import StandardScaler
@@ -8,12 +11,47 @@ from sklearn.decomposition import PCA
 
 from mne.decoding import SlidingEstimator, GeneralizingEstimator
 from src.multiscore_cv import cross_val_multiscore_A_B
+from src.selection import safeSelector
+from src.bolasso_sklearn import bolasso
 
 def convert_seconds(seconds):
     h = seconds // 3600
     m = (seconds % 3600) // 60
     s = seconds % 60
     return h, m, s
+
+def get_bagged_coefs(clf, n_estimators, mask):
+    coefs_list = []
+    bias_list = []
+    print(mask.shape)
+    for i in range(n_estimators):
+        model = clf.estimators_[i]
+        try:
+            mask = model.named_steps["filter"]._get_support_mask()
+            coefs = np.zeros((mask.shape[0], 1))
+        except:
+            mask = None
+
+        try:
+            coefs = model.named_steps['model'].module_.linear.weight.data.cpu().detach().numpy()[0]
+            bias = model.named_steps['model'].module_.linear.bias.data.cpu().detach().numpy()[0]
+        except:
+            if mask is None:
+                coefs = model.named_steps['model'].coef_.T
+            else:
+                coefs[mask] = model.named_steps['model'].coef_.T
+            try:
+                bias = model.named_steps['model'].intercept_.T
+            except:
+                bias = None
+
+        # coefs, bias = rescale_coefs(model, coefs, bias)
+
+        coefs_list.append(coefs)
+        bias_list.append(bias)
+
+    return np.array(coefs_list).mean(0), np.array(bias_list).mean(0)
+
 
 class ClassificationCV:
     def __init__(self, model, params, **kwargs):
@@ -42,6 +80,10 @@ class ClassificationCV:
         if (kwargs["n_comp"] is not None) and (kwargs["n_comp"]!=0):
             self.n_comp = kwargs["n_comp"]
             pipeline.append(("pca", PCA(n_components=self.n_comp)))
+
+        self.prescreen = kwargs["prescreen"]
+        if kwargs["prescreen"] is not None:
+            pipeline.append(("filter", safeSelector(method=kwargs['prescreen'] , alpha=kwargs["pval"])))
 
         # model is the regression/classification based model
         # see e.g. https://scikit-learn.org/stable/api/sklearn.linear_model.html
@@ -78,6 +120,10 @@ class ClassificationCV:
                 n_splits=kwargs["n_splits"], n_repeats=kwargs["n_repeats"]
             )
 
+        self.hp_cv = RepeatedStratifiedKFold(
+            n_splits=kwargs["n_splits"], n_repeats=kwargs["n_repeats"]
+        )
+
         self.n_jobs = kwargs["n_jobs"]
 
         # Parameter grid for gridsearch of hyperparameters
@@ -87,14 +133,16 @@ class ClassificationCV:
             self.pipe,
             self.params,
             refit=True,
-            cv=self.cv,
+            cv=self.hp_cv,
             scoring=self.scoring,
             n_jobs=self.n_jobs,
+            verbose=0,
         )
+
 
         # By default sets best_model to the grid to perform nested CV.
         # This is overwritten when calling the fit method.
-        self.best_model = clone(self.grid)
+        self.best_model = deepcopy(self.pipe)
 
         self.verbose = kwargs["verbose"]
 
@@ -108,7 +156,6 @@ class ClassificationCV:
         if self.verbose:
             print("Fitting hyperparameters on single epoch ...")
 
-
         self.grid.fit(X.astype("float32"), y.astype("float32"))
         end = perf_counter()
         if self.verbose:
@@ -119,6 +166,7 @@ class ClassificationCV:
 
         self.best_model = self.grid.best_estimator_
         self.best_params = self.grid.best_params_
+        self.mask = np.ones(X.shape[1], dtype='int32')
 
         if self.verbose:
             print(self.best_params)
@@ -140,10 +188,33 @@ class ClassificationCV:
         except:
             # coefs from sklearn models
             self.coefs = self.best_model.named_steps["model"].coef_.T
-            self.bias = self.best_model.named_steps["model"].intercept_.T
+            try:
+                self.bias = self.best_model.named_steps["model"].intercept_.T
+            except:
+                self.bias = None
+
+    def get_bolasso_coefs(self, X, y, n_boots=1000, penalty='l1', pval=.05, confidence=0.05):
+        bmodel = bolasso(
+            self.best_model,
+            penalty=penalty,
+            n_boots=n_boots,
+            pval=pval,
+            confidence=confidence,
+            n_jobs=-1,
+            verbose=1,
+        )
+
+        bmodel.fit_bolasso(X, y)
+        self.coefs = bmodel.coef_
+        # self.bias = model.bias
+
+        return self.coefs
 
     def get_bootstrap_coefs(self, X, y, n_boots=10):
         """Bootstrapping model coeficients. Useful when using lasso regularization."""
+
+        if n_boots<2:
+            return self.coefs, self.bias
 
         start = perf_counter()
         if self.verbose:
@@ -161,7 +232,7 @@ class ClassificationCV:
                 % convert_seconds(end - start)
             )
 
-        self.coefs, self.bias = get_bagged_coefs(self.bagging_clf, n_estimators=n_boots)
+        self.coefs, self.bias = get_bagged_coefs(self.bagging_clf, n_estimators=n_boots, mask=self.mask)
 
         return self.coefs, self.bias
 
@@ -182,7 +253,10 @@ class ClassificationCV:
             )
         except:
             coefs = pipe.named_steps["model"].coef_.T
-            bias = pipe.named_steps["model"].intercept_.T
+            try:
+                bias = pipe.named_steps["model"].intercept_.T
+            except:
+                bias = None
 
         if self.scaler is not None and self.scaler != 0:
             scaler = pipe.named_steps["scaler"]
@@ -230,7 +304,7 @@ class ClassificationCV:
 
         return np.array(overlaps_list).mean(0)
 
-    def get_cv_scores(self, X, y, scoring, cv=None, X_B=None, y_B=None, cv_B=None, verbose=False):
+    def get_cv_scores(self, X, y, scoring, cv=None, X_B=None, y_B=None, cv_B=False, verbose=False):
         """Cross validated model scores:
 
         Parameters:
@@ -251,7 +325,8 @@ class ClassificationCV:
 
          X_B: None or float array of size (N_SAMPLES_B, N_FEATURES_B, N_TIMES)
          y_B: None or float array of size (N_SAMPLES_B,)
-         cv_B: same as cv
+         cv_B: bool, False performs testing on all B samples
+                     True cross validate B samples following cv used for A.
 
         Returns:
         scores: float array of test scores.
@@ -269,14 +344,14 @@ class ClassificationCV:
 
         if self.mne_estimator == 'sliding':
             estimator = SlidingEstimator(
-                clone(self.best_model), n_jobs=1, scoring=scoring, verbose=False
+                deepcopy(self.best_model), n_jobs=1, scoring=scoring, verbose=False
             )
         elif self.mne_estimator == 'generalizing':
             estimator = GeneralizingEstimator(
-                clone(self.best_model), n_jobs=1, scoring=scoring, verbose=False
+                deepcopy(self.best_model), n_jobs=1, scoring=scoring, verbose=False
             )
 
-        self.scores, self.probas, self.coefs = cross_val_multiscore_A_B(
+        self.scores, self.probas, self.coefs, labels = cross_val_multiscore_A_B(
             estimator,
             X_A=X,
             y_A=y,
@@ -284,7 +359,7 @@ class ClassificationCV:
             X_B=X_B,
             y_B=y_B,
             cv_B=cv_B,
-            n_jobs=None,
+            n_jobs=self.n_jobs,
             verbose=verbose,
         )
 
@@ -295,4 +370,4 @@ class ClassificationCV:
                 % convert_seconds(end - start)
             )
 
-        return self.scores, self.probas, self.coefs
+        return self.scores, self.probas, self.coefs, labels

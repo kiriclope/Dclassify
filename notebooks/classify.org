@@ -106,20 +106,6 @@ print('X_B', X_B.shape, 'y_B', y_B.shape)
 
 #+RESULTS:
 
-** Coefficients
-
-#+begin_src ipython
-options['verbose'] = 0
-X_epoch = X[..., 0]
-coefs, bias = get_classification(super_model, X_epoch, y, RETURN='coefs', **options)
-#+end_src
-
-#+RESULTS:
-: Fitting hyperparameters on single epoch ...
-: Elapsed (with compilation) = 0h 0m 0s
-: {}
-: Elapsed (with compilation) = 0h 0m 0s
-
 ** Scores
 
 #+begin_src ipython
@@ -127,6 +113,7 @@ scores, probas, coefs = get_classification(super_model, X, y, X_B=None, y_B=y_B,
 #+end_src
 
 #+RESULTS:
+: Features, X, (100, 20, 10)  | labels, y, (100,)
 : Computing cv scores ...
 : Elapsed (with compilation) = 0h 0m 0s
 : Elapsed (with compilation) = 0h 0m 0s
@@ -151,3 +138,16 @@ print(np.array(coefs).shape)
 
 #+RESULTS:
 : (5, 21, 1, 10)
+** Coefficients
+
+#+begin_src ipython
+options['verbose'] = 0
+X_epoch = X[..., 0]
+coefs, bias = get_classification(super_model, X_epoch, y, RETURN='coefs', **options)
+#+end_src
+
+#+RESULTS:
+: Fitting hyperparameters on single epoch ...
+: Elapsed (with compilation) = 0h 0m 0s
+: {}
+: Elapsed (with compilation) = 0h 0m 0s
