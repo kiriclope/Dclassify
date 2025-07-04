@@ -17,21 +17,21 @@ from sklearn.utils import indexable
 
 @verbose
 def cross_val_multiscore_A_B(
-    estimator,
-    X_A,
-    y_A=None,
-    cv_A=None,
-    groups_A=None,
-    X_B=None,
-    y_B=None,
-    cv_B=False,
-    groups_B=None,
-    scoring=None,
-    n_jobs=None,
-    verbose=None,
-    fit_params=None,
-    ret_all=False,
-    pre_dispatch="2*n_jobs",
+        estimator,
+        X_A,
+        y_A=None,
+        cv_A=None,
+        groups_A=None,
+        X_B=None,
+        y_B=None,
+        cv_B=False,
+        groups_B=None,
+        scoring=None,
+        n_jobs=None,
+        verbose=None,
+        fit_params=None,
+        ret_all=False,
+        pre_dispatch="2*n_jobs",
 ):
 
     check_scoring = _get_check_scoring()
@@ -40,37 +40,44 @@ def cross_val_multiscore_A_B(
     X_A, y_A, groups_A = indexable(X_A, y_A, groups_A)
     cv_A = check_cv(cv_A, y_A, classifier=is_classifier(estimator))
     cv_A = list(cv_A.split(X_A, y_A, groups_A))
+    y_A = y_A % 2
 
-    IF_COMPO=1
-    if X_B is None:
-        IF_COMPO = 0
-        cv_B = cv_A
+    # IF_COMPO=1
+    # if X_B is None:
+    #     IF_COMPO = 0
+    #     cv_B = cv_A
 
-    if IF_COMPO:
-        X_B, y_B, groups_A = indexable(X_B, y_B, groups_B)
-        # setting folds for set B
-        if cv_B:
-            cv_B = check_cv(cv_dum, y_B, classifier=is_classifier(estimator))
-            cv_B = list(cv_B.split(X_B, y_B, groups_B))
+    # setting folds for set B
+    if cv_B:
+        X_B, y_B, groups_B = indexable(X_B, y_B, groups_B)
+        cv_B = check_cv(cv_dum, y_B, classifier=is_classifier(estimator))
+        cv_B = list(cv_B.split(X_B, y_B, groups_B))
 
-            while len(cv_B) < len(cv_A):
-                cv_B.append([[], []])
+    # if IF_COMPO:
+    #     X_B, y_B, groups_B = indexable(X_B, y_B, groups_B)
+    #     # setting folds for set B
+    #     if cv_B:
+    #         cv_B = check_cv(cv_dum, y_B, classifier=is_classifier(estimator))
+    #         cv_B = list(cv_B.split(X_B, y_B, groups_B))
 
-        else:
-            # no split testing on all X_B
-            n_samples = len(y_B)
-            cv_B = []
-            for (train_A, test_A) in cv_A:
-                cv_B.append([np.arange(n_samples), np.arange(n_samples)])  # Single tuple for no split
+    #         while len(cv_B) < len(cv_A):
+    #             cv_B.append([[], []])
 
-        # using exact same folds for A and B for temporal generalization
-        if X_A.shape == X_B.shape and np.array_equal(X_A, X_B):
-            cv_B=cv_A
+    #     else:
+    #         # no split testing on all X_B
+    #         n_samples = len(y_B)
+    #         cv_B = []
+    #         for (train_A, test_A) in cv_A:
+    #             cv_B.append([np.arange(n_samples), np.arange(n_samples)])  # Single tuple for no split
 
-        if verbose:
-            print('cv_A', len(cv_A), 'cv_B', len(cv_B))
-            print('X_A', X_A.shape, 'y_A', y_A.shape)
-            print('X_B', X_B.shape, 'y_B', y_B.shape)
+    #     # using exact same folds for A and B for temporal generalization
+    #     if X_A.shape == X_B.shape and np.array_equal(X_A, X_B):
+    #         cv_B=cv_A
+
+    #     if verbose:
+    # print('cv_A', len(cv_A), 'cv_B', len(cv_B))
+    # print('X_A', X_A.shape, 'y_A', y_A.shape)
+    # print('X_B', X_B.shape, 'y_B', y_B.shape)
 
     try:
         scorer = check_scoring(estimator, scoring=scoring)
@@ -81,6 +88,27 @@ def cross_val_multiscore_A_B(
         _fit_and_score_A_B, n_jobs, pre_dispatch=pre_dispatch
     )
 
+    # scores, probas, coefs, labels = zip(*parallel(
+    #     p_func(
+    #         estimator=deepcopy(estimator),
+    #         X_A=X_A,
+    #         y_A=y_A,
+    #         train_A=train_A,
+    #         test_A=test_A,
+    #         X_B=X_B,
+    #         y_B=y_B,
+    #         test_B=test_B,
+    #         scorer=scorer,
+    #         if_compo=IF_COMPO,
+    #         fit_params=fit_params,
+    #         ret_all=ret_all,
+    #         verbose=None,
+    #     )
+    #     for (train_A, test_A), (_, test_B) in zip(cv_A, cv_B)
+    #     # for (train_A, test_A) in cv_A for (_, test_B) in cv_B
+    # ))
+
+    fit_params = fit_params if fit_params is not None else {}
     scores, probas, coefs, labels = zip(*parallel(
         p_func(
             estimator=deepcopy(estimator),
@@ -88,17 +116,37 @@ def cross_val_multiscore_A_B(
             y_A=y_A,
             train_A=train_A,
             test_A=test_A,
-            X_B=X_B,
-            y_B=y_B,
-            test_B=test_B,
+            X_B=None,
+            y_B=None,
+            test_B=None,
             scorer=scorer,
-            if_compo=IF_COMPO,
+            if_compo=0,
             fit_params=fit_params,
             ret_all=ret_all,
             verbose=None,
         )
-        for (train_A, test_A), (_, test_B) in zip(cv_A, cv_B)
-   ))
+        for (train_A, test_A) in cv_A
+    ))
+
+    if cv_B:
+        estimator.fit(X_A, y_A, **fit_params)
+
+        parallel, p_func, n_jobs = parallel_func(
+            _nofit_and_score_B, n_jobs, pre_dispatch=pre_dispatch
+        )
+
+        scores_B = parallel(
+            p_func(
+                estimator=deepcopy(estimator),
+                X_B=X_B,
+                y_B=y_B,
+                test_B=test_B,
+                scorer=scorer,
+            )
+            for (_, test_B) in cv_B
+        )
+
+        scores = [scores, scores_B]
 
     return scores, probas, coefs, labels
 
@@ -176,6 +224,19 @@ def _fit_and_score_A_B(
         return scores, probas, coefs, labels
     else:
         return scores, 0, 0, 0
+
+def _nofit_and_score_B(
+        estimator,
+        X_B,
+        y_B,
+        test_B,
+        scorer,
+):
+
+    X_B_test, y_B_test = _safe_split(estimator, X_B, y_B, test_B)
+    score_B = _score(estimator, X_B_test, y_B_test, scorer)
+
+    return score_B
 
 def _score(estimator, X_test, y_test, scorer):
     """Compute the score of an estimator on a given test set.

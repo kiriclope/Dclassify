@@ -1,0 +1,71 @@
+#+PROPERTY: header-args:ipython :results both :exports both :async yes :session decoder :kernel dual_data
+
+
+*** How do I create syntetic data for classification using sklearn?
+
+You can create synthetic data for classification using the =make_classification= function from scikit-learn. Here's a basic example:
+
+#+begin_src ipython
+from sklearn.datasets import make_classification
+import matplotlib.pyplot as plt
+
+# Generate synthetic data
+X_list, y_list = [], []
+for i in range(100):
+    X, y = make_classification(n_samples=1000,    # Number of samples
+                               n_features=100,     # Total number of features
+                               n_informative=2,   # Number of informative features
+                               n_redundant=2,     # Number of redundant features
+                               n_classes=2,       # Number of classes
+                               random_state=42)   # Seed for reproducibility
+    X_list.append(X)
+    y_list.append(y)
+
+# Optional: Visualize two features
+plt.scatter(X[:, 0], X[:, 1], c=y, cmap='viridis', edgecolor='k', s=20)
+plt.title('Synthetic Classification Data')
+plt.xlabel('Feature 1')
+plt.ylabel('Feature 2')
+plt.show()
+#+end_src
+
+
+This will create a dataset with 1,000 samples, 20 features (2 informative, 2 redundant), and 2 classes. You can adjust the parameters such as =n_samples=, =n_features=, =n_informative=, etc., to suit your needs.
+
+#+begin_src ipython
+X = np.array(X_list).T.swapaxes(0, 1)
+y = np.array(y_list)[0]
+
+print(X.shape, y.shape)
+#+end_src
+
+#+RESULTS:
+: (1000, 100, 100) (1000,)
+
+#+begin_src ipython
+import sys
+sys.path.insert(0, '../')
+
+from src.multiscore_cv_shuffle import cross_val_perm_multiscore
+from sklearn.linear_model import LogisticRegression
+
+from mne.decoding import SlidingEstimator
+
+estimator = LogisticRegression()
+mne_estimator = SlidingEstimator(estimator, n_jobs=1, verbose=False)
+
+scores, perm_scores = cross_val_perm_multiscore(
+    mne_estimator,
+    X,
+    y,
+    cv=None,
+    groups=None,
+    scoring=None,
+    n_perm=100,
+    n_jobs=None,
+    fit_params=None,
+)
+
+#+end_src
+
+#+RESULTS:

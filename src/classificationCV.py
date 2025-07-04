@@ -7,12 +7,37 @@ from sklearn.ensemble import BaggingClassifier
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import GridSearchCV, RepeatedStratifiedKFold, LeaveOneOut
-from sklearn.decomposition import PCA
+from sklearn.decomposition import PCA,SparsePCA
 
-from mne.decoding import SlidingEstimator, GeneralizingEstimator
+from mne.decoding import SlidingEstimator, GeneralizingEstimator, Scaler, Vectorizer
 from src.multiscore_cv import cross_val_multiscore_A_B
 from src.selection import safeSelector
 from src.bolasso_sklearn import bolasso
+
+from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.decomposition import PCA
+import numpy as np
+
+class SignAlignedPCA(BaseEstimator, TransformerMixin):
+    def __init__(self, n_components):
+        self.n_components = n_components
+
+    def fit(self, X, y=None):
+        # Fit PCA on the training data
+        self.pca_ = PCA(n_components=self.n_components)
+        X_pca = self.pca_.fit_transform(X)
+
+        # For each component, decide on a reference sign.
+        # Here we take the sign of the mean across samples.
+        mean_components = np.mean(X_pca, axis=0)
+        self.sign_flip_ = np.where(mean_components >= 0, 1, -1)
+        return self
+
+    def transform(self, X):
+        # Transform data using the fitted PCA
+        X_pca = self.pca_.transform(X)
+        # Adjust the sign of each component based on the training reference
+        return X_pca * self.sign_flip_
 
 def convert_seconds(seconds):
     h = seconds // 3600
@@ -71,15 +96,28 @@ class ClassificationCV:
         # Standardize features, X, z score across trials
         # see https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.StandardScaler.html
         self.scaler = kwargs["scaler"]
-        if self.scaler is not None and self.scaler != 0:
-            pipeline.append(("scaler", StandardScaler()))
+        if (self.scaler is not None) and (self.scaler != 0):
+            if self.scaler == 'standard':
+                pipeline.append(("scaler", StandardScaler()))
+            elif self.scaler == 'center':
+                pipeline.append(("scaler", StandardScaler(with_std=False)))
+            elif self.scaler == 'mne':
+                pipeline.append(("scaler", Scaler(scalings='mean')))
+                pipeline.append(("vec", Vectorizer()))
 
         # Reduce features, X, dimensionality with PCA
         # see https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.PCA.html
         self.n_comp = kwargs["n_comp"]
-        if (kwargs["n_comp"] is not None) and (kwargs["n_comp"]!=0):
+        print('PCA', kwargs['pca'], self.n_comp)
+
+        if (kwargs['pca'] is not None) and (kwargs['pca'] == 'sparse'):
+            self.n_comp = kwargs["n_comp"]
+            pipeline.append(("pca", SparsePCA(n_components=self.n_comp)))
+        elif (kwargs["n_comp"] is not None) and (kwargs["n_comp"]!=0):
+            print('PCA', self.n_comp)
             self.n_comp = kwargs["n_comp"]
             pipeline.append(("pca", PCA(n_components=self.n_comp)))
+
 
         self.prescreen = kwargs["prescreen"]
         if kwargs["prescreen"] is not None:
@@ -100,6 +138,7 @@ class ClassificationCV:
         # see https://scikit-learn.org/stable/modules/model_evaluation.html
         # 'accuracy', 'roc_auc', 'f1'
         self.scoring = kwargs["scoring"]
+        self.hp_scoring = kwargs["hp_scoring"]
 
         # Decoding over time (from MNE)
         # if estimator is SlidingEstimator(base_estimator, scoring=None, n_jobs=1, verbose=None)
@@ -134,17 +173,23 @@ class ClassificationCV:
             self.params,
             refit=True,
             cv=self.hp_cv,
-            scoring=self.scoring,
+            scoring=self.hp_scoring,
             n_jobs=self.n_jobs,
             verbose=0,
         )
-
 
         # By default sets best_model to the grid to perform nested CV.
         # This is overwritten when calling the fit method.
         self.best_model = deepcopy(self.pipe)
 
         self.verbose = kwargs["verbose"]
+
+    def fit_pca(self, X, y=None):
+        self.best_model.fit(X, y)
+        self.explained_variance_ = self.best_model.named_steps['pca'].explained_variance_
+        self.components_ = self.best_model.named_steps['pca'].components_
+
+        return self.components_, self.explained_variance_
 
     def fit(self, X, y):
         """Fits the model hyperparameters with GridSearchCV.
@@ -165,6 +210,7 @@ class ClassificationCV:
             )
 
         self.best_model = self.grid.best_estimator_
+
         self.best_params = self.grid.best_params_
         self.mask = np.ones(X.shape[1], dtype='int32')
 
@@ -338,17 +384,19 @@ class ClassificationCV:
         if cv is None:
             cv = self.cv
 
+        print(cv)
+
         start = perf_counter()
         if self.verbose:
             print("Computing cv scores ...")
 
         if self.mne_estimator == 'sliding':
             estimator = SlidingEstimator(
-                deepcopy(self.best_model), n_jobs=1, scoring=scoring, verbose=False
+                deepcopy(self.best_model), n_jobs=64, scoring=scoring, verbose=False
             )
         elif self.mne_estimator == 'generalizing':
             estimator = GeneralizingEstimator(
-                deepcopy(self.best_model), n_jobs=1, scoring=scoring, verbose=False
+                deepcopy(self.best_model), n_jobs=64, scoring=scoring, verbose=False
             )
 
         self.scores, self.probas, self.coefs, labels = cross_val_multiscore_A_B(
